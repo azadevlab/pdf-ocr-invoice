@@ -1,0 +1,354 @@
+---
+
+your_data:
+  ##! Please fill by your data the next keys =
+  ###   b13_iik = your bank account number, need for comparing by invoice
+  ###   c18_1_customer_country_code = RU, GB, US, DE, CH, BG, AE and so on
+  ###   g3 = name of work/service. 
+  ###     Please compare by invoice and by your Name of Main Code of Ecnomic Type (ОКЭД).
+  ###     62011 Разработка программного обеспечения
+  ###     18203 Воспроизведение программного обеспечения и баз данных
+  ###     62099 (QA) Другие виды деятельности в области информационных технологий и
+  ###           информационных систем, не включенные в другие группировки
+  ###     62099 (PM, DM, BA) Другие виды деятельности в области информационных технологий
+  ###           и информационных систем, не включенные в другие группировки
+  ###     62032 (DevOps) Деятельность по управлению информационно-коммуникационным оборудованием
+  ###     62092 (Cyber Security) Деятельность в области кибербезопасности
+  ###     74100 (Дизайнеры) Специализированная дизайнерская деятельность
+  ###     74200 (Дизайнеры) Деятельность в области фотографии
+  ###     62032 (IT сис админ) Деятельность по 
+  ###           управлению информационно-коммуникационным оборудованием
+  ###     33126 (IT сис админ) Ремонт и техническое обслуживание офисных машин
+  ###           и вычислительной техники
+  ###     62099 (IT сис админ) Другие виды деятельности в области информационных технологий
+  ###           и информационных систем, не включенные в другие группировки
+  ###     78301 (HRM) Прочая деятельность по обеспечению трудовыми ресурсами (персоналом),
+  ###           кроме деятельности организаций, учрежденных национальными компаниями
+  ###     73200 (Marketing, PR) Исследование конъюнктуры рынка и изучение общественного мнения
+  ###     74300 (English teacher) Деятельность по устному и письменному переводу
+  b10_category: "G-Экпортер"
+  b12_kbe: 19
+  b13_iik: "KZ*************"
+  c18_1_customer_country_code: "GB"
+  c20_cat_recipient: "F-Нерезидент"
+  e20_payment_terms: "Безналичный расчет"
+  e20_payment_method: "99 - Прочие"
+  g2: 6
+  g3: "Услуги по управлению информационно-коммуникационным оборудованием"
+  g5: "Выбрать из списка «одна услуга»"
+  g6: "Ввести количество «1»"
+
+
+url:
+  ##! http = Mandatory. National Bank of Kazakhstan url link
+  ##! select_currency = Mandatory. Select your currency by integer.
+  ###   Pls, look at the table above if required currency is missing, then look for on the url site
+  ###   By default sets to $USD = select_currency: "5"
+  http: "https://www.nationalbank.kz/ru/exchangerates/ezhednevnye-oficialnye-rynochnye-kursy-valyut/report?rates%5B%5D="
+  select_currency: "5"
+  gbp: "2"
+  aed: "4"
+  usd: "5"
+  eur: "6"
+  cny: "8"
+  kgs: "10"
+  rur: "16"
+
+
+tax:
+  ##! header = Mandatory. Header of table and filter for creating tabulate table.
+  ###   Filtering other section from this section.
+  ###   So if {desc} in header then look for {desc} in other nested dicts.
+  ##! all other keys are Optional 
+  ##! local_variables_create = Optional. if defined creates local var 
+  ###   like {local_mainkey} = {key.formula}, like local_opv_min, local_opv_max, local_opv_formula
+  header:
+    desc: "Тип налогов и взносов"
+    knp_code: "КНП код"
+    kbk_code: "КБК код"
+    formula: "Сумма"
+
+  mzp:
+    local_variables_create: min, formula # local_mzp_min = tax["mzp"]["formula"]
+    desc: "МЗП"
+    knp_code: "отсутствует"
+    kbk_code: "отсутствует"
+    min:
+      60000 # с 01.01.2022 г. размер МЗП составляет 60 000 тг.
+    formula: config["tax"]["mzp"]["min"]
+
+  opv:
+    local_variables_create:  perc, min, max, formula # local_opv_formula = tax["opv"]["formula"]
+    desc: "ОПВ"
+    knp_code: "010"
+    kbk_code: "901101"
+    perc: 0.1 #10% от Зарплаты :(
+    # о, Будда, покарай ЕНПФ!!! Даже наугад инвестируя в акции/облигации и т.д.
+    # не возможно так бездарно управлять и отрицательно приумножать инвестиции :(
+    min: 1 * local_mzp_min * local_opv_perc # 10% от 1 МЗП
+    max: 50 * local_mzp_formula * local_opv_perc # не более 10% от 50 МЗП
+    formula:
+      local_opv_max if (zarplata * local_opv_perc) > local_opv_max else (zarplata * local_opv_perc)
+      # eval( config["tax"]["opv"]["max"] ) if (zarplata * config["tax"]["opv"]["perc"]) > eval( config["tax"]["opv"]["max"] ) else (zarplata * config["tax"]["opv"]["perc"])
+
+  so:
+    local_variables_create:  perc, min, max, formula # local_so_formula = tax["so"]["formula"]
+    desc: "Социальные Отчисления"
+    knp_code: "012"
+    kbk_code: "902101"
+    perc: 0.035 # ЗП * 3.5%
+    min: 1 * local_mzp_min * local_so_perc # Мин предел — 1 МЗП * 3,5%
+    max: int(7 * local_mzp_min * local_so_perc) # Макс предел — 7 МЗП * 3,5%
+    formula:
+      local_so_max if (zarplata * local_so_perc ) > local_so_max else (zarplata * local_so_perc)
+      # eval( config["tax"]["so"]["max"] ) if (zarplata * config["tax"]["so"]["perc"]) > eval( config["tax"]["so"]["max"] ) else (zarplata * config["tax"]["so"]["perc"])
+
+  voms:
+    local_variables_create: perc, coef, formula # local_voms_coef = tax["voms"]["coef"]
+    desc: "ВОСМС"
+    knp_code: "122"
+    kbk_code: "904101"
+    perc: 0.05 # 5% от 1.4 МЗП
+    coef: 1.4 # 5% от 1.4 МЗП
+    formula:
+      local_mzp_min * local_voms_perc * local_voms_coef
+      # local_mzp_min * config["tax"]["voms"]["perc"] * config["tax"]["voms"]["coef"]
+
+  ipn:
+    local_variables_create: perc, formula # local_ipn_perc = tax["ipn"]["perc"]
+    desc: "ИПН"
+    knp_code: "911"
+    kbk_code: "101202"
+    perc: 0.015 # 1,5% от дохода
+    formula:
+      ceil( total_kzt_for_tax * local_ipn_perc )
+
+  sn:
+    local_variables_create: perc, formula # local_sn_perc = tax["sn"]["perc"]
+    desc: "Социальный налог для упрощенного режима ИП"
+    knp_code: "911"
+    kbk_code: "103101"
+    perc: 0.015 # 1,5% от дохода
+    formula:
+      0 if ( total_kzt_for_tax * local_sn_perc - local_so_formula ) < local_so_formula else ceil( total_kzt_for_tax * local_sn_perc - local_so_formula )
+
+  full_losses:
+    desc: "Общие потери :("
+    knp_code: "отсутствует"
+    kbk_code: "отсутствует"
+    formula:
+      ##! thousands_separator = function for separating thousands by space
+      ##! aza_summary = function for summary all given args, 
+      ###   just give args like list separated by comma
+      thousands_separator(aza_summary(local_opv_formula, local_so_formula, local_voms_formula, local_ipn_formula, local_sn_formula))
+
+
+pdf_vars:
+  ##! header = Mandatory. Header of table and filter for creating tabulate table.
+  ###   Filtering other section from this section.
+  ###   So if {desc} in header then look for {desc} in other nested dicts.
+  ##! regex = Optional. If defined then search by regular expression in pdf
+  ###   and then creates global var 
+  ##! replacer = Optional. If defined then replaces characters in global var by key to value
+  ##! extra_global_var = if defined, then create global var by key name from this nested dict
+  ##! formula = is Mandatory if {extra_global_var} is defined. Sets variable`s value
+  ###   like {local_mainkey} = {key.formula}, like local_opv_min, local_opv_max, local_opv_formula
+  header:
+    desc: "Наименование"
+    formula: "Значение"
+  amount_raw:
+    desc: "Поступило на счёт в валюте"
+    regex: "составляет (.*) USD"
+    replacer:
+      ",": "."
+      " ": ""
+    formula: amount_raw
+    type: float
+
+  invoice_number:
+    desc: "Номер инвойс"
+    regex: "Ng\\ +(\\w{4})\\ от"
+    replacer:
+      "o": "0"
+      "l": "1"
+      "g": "9"
+    formula: invoice_number
+
+  invoice_date:
+    desc: "Дата инвойса"
+    regex: "Ng\\ \\w{4}\\ от\\ (.+?)',"
+    formula: invoice_date
+
+  customer_company:
+    desc: "Поступления от"
+    regex: "Sold\\ Tо:',\\ '(.+?)\\',"
+    formula: customer_company
+
+  customer_address:
+    desc: "Адрес Заказчика"
+    regex: "Ltd', '+(.+?)',\\ '"
+    replacer:
+      ";": ","
+    formula: customer_address
+
+  agreement_number:
+    desc: "Номер Договора"
+    regex: "Договору\\ Ng\\ (.+?)\\ "
+    formula: agreement_number
+
+  agreement_date:
+    desc: "Дата Договора"
+    regex: "Договору\\ Ng\\ +[^\r]+\\ от\\ (.+?)\\ "
+    formula: agreement_date
+
+  beneficiary_number_pdf:
+    desc: "Номер счёта зачисления из PDF"
+    regex: "of\\ beneficiary:',\\ '(.+?)',"
+    formula: beneficiary_number_pdf
+
+  beneficiary_number_config:
+    desc: "Номер счёта указанного в конфиге"
+    formula: config["your_data"]["b13_iik"]
+
+  beneficiary_number_recheck:
+    desc: "Номер счёта"
+    formula:
+      beneficiary_number_pdf if beneficiary_number_pdf == config["your_data"]["b13_iik"] else "Счёт в конфиге и в инвойсе не совпадают!!! Пожалуйста, перепроверьте"
+
+  rate_on_date:
+    desc: "Курс НБ РК на дату инвойса"
+    formula: exchange_rate(config["url"])
+    extra_global_var: # если есть, то создаём доп глобал переменную
+  
+  total_kzt_for_tax:
+    desc: "Отчитываемая сумма в ЭСФ в тенге"
+    formula: ceil(rate_on_date * amount_raw)
+    extra_global_var: # если есть, то создаём доп глобал переменную
+
+
+esf:
+  ### For filling ESF report
+  header:
+    chapter: "Раздел ЭСФ"
+    field: "Поле ЭСФ"
+    data: "Данные для заполнения ЭСФ"
+
+  a11:
+    chapter: "A"
+    field: "1.1. Номер учетной системы"
+    data: invoice_number
+
+  a2:
+    chapter: "A"
+    field: "2. Дата выписки"
+    data: invoice_date
+
+  a3:
+    chapter: "A"
+    field: "3. Дата совершения оборота"
+    data: "Выберите последний день месяца"
+
+  b10:
+    chapter: "B"
+    field: "10. Категория поставщика"
+    data: config["your_data"]["b10_category"]
+
+  b12:
+    chapter: "B"
+    field: "12. КБе"
+    data: config["your_data"]["b12_kbe"]
+
+  b13:
+    chapter: "B"
+    field: "13. ИИК"
+    data: config["your_data"]["b13_iik"]
+
+  c17:
+    chapter: "C"
+    field: "17. Получатель"
+    data: customer_company
+
+  c18:
+    chapter: "C"
+    field: "18. Адрес места нахождения"
+    data: customer_address
+
+  c181:
+    chapter: "C"
+    field: "18.1. Код страны"
+    data: config["your_data"]["c18_1_customer_country_code"]
+
+  c20:
+    chapter: "C"
+    field: "20. Категория получателя"
+    data: config["your_data"]["c20_cat_recipient"]
+
+  d262:
+    chapter: "D"
+    field: "26.2. Грузополучатель"
+    data: customer_company
+
+  d263:
+    chapter: "D"
+    field: "26.3. Адрес доставки"
+    data: customer_address
+
+  d264:
+    chapter: "D"
+    field: "26.4. Код страны"
+    data: config["your_data"]["c18_1_customer_country_code"]
+
+  e273:
+    chapter: "E"
+    field: "27.3. Номер договора(контракт) на поставку"
+    data: agreement_number
+
+  e274:
+    chapter: "E"
+    field: "27.4. Дата договора(контракт) на поставку"
+    data: agreement_date
+
+  e28:
+    chapter: "E"
+    field: "28. Условия оплаты по договору"
+    data: config["your_data"]["e20_payment_terms"]
+
+  e29:
+    chapter: "E"
+    field: "29. Способ отправления"
+    data: agreement_date
+
+  f321:
+    chapter: "F"
+    field: "32.1. Номер документа, подтверждающего"
+    data: invoice_number
+
+  f322:
+    chapter: "F"
+    field: "32.2. Дата документа, подтверждающего"
+    data: invoice_date
+
+  g2:
+    chapter: "G"
+    field: 2. Признак происхождения товара
+    data: config["your_data"]["g2"]
+
+  g3:
+    chapter: "G"
+    field: 3. Наименование товаров
+    data: config["your_data"]["g3"]
+
+  g5:
+    chapter: "G"
+    field: 5. Ед. изм."
+    data: config["your_data"]["g5"]
+
+  g6:
+    chapter: "G"
+    field: 6. Кол-во (объем)
+    data: config["your_data"]["g6"]
+
+  g7:
+    chapter: "G"
+    field: 7. Цена (тариф) за единицу товара...
+    data: ceil(total_kzt_for_tax)
